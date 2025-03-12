@@ -7,7 +7,6 @@ import psycopg2
 password = st.secrets["database"]["DBPASSWD"]
 
 # Connect to the database using psycopg2
-#cstring = f'postgresql://postgres:{password}@db.orpsyqcvpzvjrpwjmdbe.supabase.co:5432/postgres'
 cstring = f'postgresql://postgres.orpsyqcvpzvjrpwjmdbe:{password}@aws-0-us-west-1.pooler.supabase.com:5432/postgres'
 
 # Update to use psycopg2 for creating a connection and executing queries
@@ -34,6 +33,7 @@ if "round" not in st.session_state:
     st.session_state.username = ""
     st.session_state.username_submitted = False
     st.session_state.all_predictions = []  # Stores all winners for tracking
+    st.session_state.timestamp = datetime.now()  # Capture timestamp when the round 1 bracket is loaded
 
 # Database setup (Check if table exists before creating)
 cursor.execute("""
@@ -49,14 +49,14 @@ if not table_exists:
             round INTEGER,
             match VARCHAR(255),
             winner VARCHAR(100),
-            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            timestamp TIMESTAMP
         )
     ''')
     conn.commit()
 
 def save_predictions(username, round, matchups, winners):
     """Saves the predictions to the database and session state."""
-    timestamp = datetime.now()
+    timestamp = st.session_state.timestamp  # Use the timestamp from session state
     for match, winner in zip(matchups, winners):
         cursor.execute('''
             INSERT INTO predictions (username, round, match, winner, timestamp)
@@ -80,6 +80,7 @@ def reset_bracket():
     st.session_state.matchups = generate_matchups(teams)
     st.session_state.winners = []
     st.session_state.all_predictions = []  # Clear all stored predictions
+    st.session_state.timestamp = datetime.now()  # Capture timestamp when the round 1 bracket is loaded
     st.rerun()
 
 # User input for username
@@ -119,5 +120,5 @@ if st.session_state.username_submitted:
         reset_bracket()
 
 # Close the cursor and connection when the app is closed
-cursor.close()
-conn.close()
+#cursor.close()
+#conn.close()
