@@ -1,4 +1,3 @@
 streamlit
 pandas
-sqlalchemy
-cx_Oracle
+psycopg2-binary
