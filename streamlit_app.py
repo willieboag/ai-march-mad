@@ -1,6 +1,21 @@
+import os
 import streamlit as st
-import sqlite3
 from datetime import datetime
+from sqlalchemy import create_engine, text
+
+# Load database credentials securely from Streamlit secrets
+try:
+    username = st.secrets["database"]["DB_USERNAME"]
+    password = st.secrets["database"]["DB_PASSWD"]
+    dbname   = st.secrets["database"]["DBNAME"]  # Example: 'your-db-host.com'
+except KeyError as e:
+    st.error(f"Missing database configuration: {e}")
+    st.stop()
+
+# Create the correct SQLAlchemy connection string for Oracle
+DATABASE_URL = f"oracle+cx_oracle://{username}:{password}@{dbname}"
+oracle_engine = create_engine(DATABASE_URL)
+
 
 # Define the initial 16 teams
 teams = [
@@ -22,11 +37,9 @@ teams = [
     "15 - Nancy Kerrigan"
 ]
 
-
 def generate_matchups(teams):
     """Generates matchups in a bracket order."""
     return [(teams[i], teams[i+1]) for i in range(0, len(teams), 2)]
-
 
 # Initialize session state for tracking rounds, username, and predictions
 if "round" not in st.session_state:
@@ -37,30 +50,42 @@ if "round" not in st.session_state:
     st.session_state.username_submitted = False
     st.session_state.all_predictions = []  # Stores all winners for tracking
 
-# Database setup
-conn = sqlite3.connect('data/pred.db')
-c = conn.cursor()
-c.execute('''
-    CREATE TABLE IF NOT EXISTS predictions (
-        username TEXT,
-        round INTEGER,
-        match TEXT,
-        winner TEXT,
-        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
-''')
-conn.commit()
+# Database setup (Check if table exists before creating)
+with oracle_engine.connect() as conn:
+    result = conn.execute(text("""
+        SELECT COUNT(*) FROM user_tables WHERE table_name = 'PREDICTIONS'
+    """))
+    table_exists = result.scalar() > 0
+    
+    if not table_exists:
+        conn.execute(text('''
+            CREATE TABLE predictions (
+                username VARCHAR2(100),
+                round NUMBER,
+                match VARCHAR2(255),
+                winner VARCHAR2(100),
+                timestamp TIMESTAMP DEFAULT SYSTIMESTAMP
+            )
+        '''))
+        conn.commit()
 
 def save_predictions(username, round, matchups, winners):
     """Saves the predictions to the database and session state."""
     timestamp = datetime.now()
-    for match, winner in zip(matchups, winners):
-        c.execute('''
-            INSERT INTO predictions (username, round, match, winner, timestamp)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (username, round, f"{match[0]} vs {match[1]}", winner, timestamp))
-        st.session_state.all_predictions.append(winner)  # Store all predictions
-    conn.commit()
+    with oracle_engine.connect() as conn:
+        for match, winner in zip(matchups, winners):
+            conn.execute(text('''
+                INSERT INTO predictions (username, round, match, winner, timestamp)
+                VALUES (:username, :round, :match, :winner, :timestamp)
+            '''), {
+                "username": username,
+                "round": round,
+                "match": f"{match[0]} vs {match[1]}",
+                "winner": winner,
+                "timestamp": timestamp
+            })
+            st.session_state.all_predictions.append(winner)  # Store all predictions
+        conn.commit()
 
 def next_round():
     """Moves to the next round with the selected winners."""
@@ -90,7 +115,7 @@ if not st.session_state.username_submitted:
 
 # Display the bracket UI only if the username has been submitted
 if st.session_state.username_submitted:
-    st.title("March Madness Bracket Predictor 🏀")
+    st.title("AI March Madness Bracket")
     st.subheader(f"Round {st.session_state.round}")
 
     winners = []
@@ -114,6 +139,3 @@ if st.session_state.username_submitted:
 
     if st.button("Reset Bracket"):
         reset_bracket()
-
-# Close the database connection
-conn.close()
