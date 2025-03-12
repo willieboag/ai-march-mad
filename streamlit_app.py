@@ -7,7 +7,8 @@ import psycopg2
 password = st.secrets["database"]["DBPASSWD"]
 
 # Connect to the database using psycopg2
-cstring = f'postgresql://postgres:{password}@db.orpsyqcvpzvjrpwjmdbe.supabase.co:5432/postgres'
+#cstring = f'postgresql://postgres:{password}@db.orpsyqcvpzvjrpwjmdbe.supabase.co:5432/postgres'
+cstring = f'postgresql://postgres.orpsyqcvpzvjrpwjmdbe:{password}@aws-0-us-west-1.pooler.supabase.com:5432/postgres'
 
 # Update to use psycopg2 for creating a connection and executing queries
 conn = psycopg2.connect(cstring)
